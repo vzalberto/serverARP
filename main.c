@@ -12,7 +12,9 @@
 
 #define ETH "eth0"
 #define RESPUESTA "Respuesta: La IP %s pertenece a %02X:%02X:%02X:%02X:%02X:%02X\n"
-#define OTRA "%02X:%02X:%02X:%02X:%02X:%02X quiere saber que pedo con %02X:%02X:%02X:%02X\n"
+#define OTRA "%02X:%02X:%02X:%02X:%02X:%02X quiere saber que onda con %d.%d.%d.%d\n"
+#define IP_TEMPLATE "%u.%u.%u.%u"
+#define MAC_TEMPLATE "%02X:%02X:%02X:%02X:%02X:%02X"
 
 struct msgARP{
 	unsigned char destinoEthernet[6];
@@ -60,7 +62,7 @@ int main(int argc, char *argv[]){
 			return -1;
 		}
 //Recepcion
-
+printf("\nQUE PASA\n");
 	do{
 		bzero(&sa, sizeof(sa));
 		bzero(&msg, sizeof(msg));
@@ -72,7 +74,11 @@ int main(int argc, char *argv[]){
 			}
 		if(ntohs(msg.tipoARP) == ARPOP_REQUEST)
 			{
-printf("relax");
+				fprintf(stdout, OTRA,
+					msg.origenMAC[0], msg.origenMAC[1], msg.origenMAC[2], msg.origenMAC[3],
+					msg.origenMAC[4], msg.origenMAC[5],
+					msg.destinoIP[0], msg.destinoIP[1], msg.destinoIP[2], msg.destinoIP[3]);
+					
 conn = mysql_init(NULL);
 				if(!mysql_real_connect(conn, server, user, password, database, 0, NULL, 0))	
 				{	
@@ -82,28 +88,58 @@ conn = mysql_init(NULL);
 				else
 				{
 					//Construir query
-					char *query = "select * from tablaARP";
+					char query[80] = "select mac from tablaARP where ip like \'";
+					char ip_str[20];
+					char mac_str[20];
+					sprintf(ip_str, "%u.%u.%u.%u", msg.destinoIP[0], msg.destinoIP[1], msg.destinoIP[2], msg.destinoIP[3]); 
+					strcat(query, ip_str);	
+					strcat(query, "\'");
 
+					sprintf(mac_str, MAC_TEMPLATE, 
+						msg.origenMAC[0], msg.origenMAC[1], msg.origenMAC[2], msg.origenMAC[3],
+						msg.origenMAC[4], msg.origenMAC[5]
+						); 
 					if(mysql_query(conn, query))
 						fprintf(stderr, "\nNEL con el query\n", mysql_error(conn));			
 					else
 					{
 						res = mysql_use_result(conn);
-						while((row = mysql_fetch_row(res)) != NULL)
+						if((row = mysql_fetch_row(res)) != NULL)
+						{
+							printf("\n");
 							printf("%s\n", row[0]);
+							printf("%s\n", mac_str);
+							if(strcmp(row[0], mac_str) == 0) 
+								printf("\nIGUALES\n");
+							else
+								{
+									printf("\nTe toca ARP gratuito, amigo\n");
+									//sendARPGRATIS
+								}	
+						}
+						else
+						{
+							printf("\nNo hay registro\n");
+							//insertarRegistro
+							char otraQuery[80];
+							strcat(otraQuery, "insert into tablaARP (mac, ip) values ('");
+							strcat(otraQuery, mac_str);
+							strcat(otraQuery, "\',\'");
+							strcat(otraQuery, ip_str);
+							strcat(otraQuery, "\')");
+							if(mysql_query(conn, otraQuery))
+								fprintf(stderr, "\nNEL con el otro query\n", mysql_error(conn));	
+							else
+								printf("\nNuevo registro\n");
+							
+						}
 						mysql_free_result(res);
 					}
 				}						
 					
-				mysql_close(conn);
+mysql_close(conn);
 				
-				fprintf(stdout, OTRA,
-					msg.origenMAC[0], msg.origenMAC[1], msg.origenMAC[2], msg.origenMAC[3],
-					msg.origenMAC[4], msg.origenMAC[5],
-					msg.destinoIP[0], msg.destinoIP[1], msg.destinoIP[2], msg.destinoIP[3]
-						); 
 			}
 		}while(1);
-printf("\nque pedo\n");
 	close(s);
 }
