@@ -8,6 +8,8 @@
 #include<string.h>
 #include<stdio.h>
 
+#include<mysql/mysql.h>
+
 #define ETH "eth0"
 #define RESPUESTA "Respuesta: La IP %s pertenece a %02X:%02X:%02X:%02X:%02X:%02X\n"
 #define OTRA "%02X:%02X:%02X:%02X:%02X:%02X quiere saber que pedo con %02X:%02X:%02X:%02X\n"
@@ -33,8 +35,20 @@ int main(int argc, char *argv[]){
 	struct sockaddr sa;
 	int s, optval, n;
 	unsigned char ip[4];
+	
+	MYSQL *conn;
+	MYSQL_RES *res;
+	MYSQL_ROW row;
+	
+	char *server = "localhost";
+	char *user = "root";
+	char *password = "//lsoazules:"; 
+	char *database = "redes";
 
-		if((s = socket(AF_INET, SOCK_PACKET, htons(ETH_P_ARP))) < 0)
+	conn = mysql_init(NULL);
+	
+
+	if((s = socket(AF_INET, SOCK_PACKET, htons(ETH_P_ARP))) < 0)
 		{
 			perror("ERROR al abrir socket");
 			return -1;
@@ -45,53 +59,7 @@ int main(int argc, char *argv[]){
 			perror("ERROR en la funcion setsockopt");
 			return -1;
 		}
-
-//Llenado de paquete
-/*
-
-	strcpy(ifr.ifr_name, ETH);
-	if(ioctl(s, SIOCGIFHWADDR, &ifr) < 0)
-		{
-			perror("ERROR al obtener MAC origen");
-			return -1;
-		}
-	bcopy(&ifr.ifr_hwaddr.sa_data, &msg.origenMAC, 6);
-	bcopy(&ifr.ifr_hwaddr.sa_data, &msg.origenEthernet, 6);
-
-	if(ioctl(s, SIOCGIFADDR, &ifr) < 0)
-		{
-			perror("ERROR al obtener IP origen");
-			return -1;
-		}
-
-	bcopy(&ifr.ifr_hwaddr.sa_data[2], &msg.origenIP, 4);
-	memset(&msg.destinoEthernet, 0xff, 6);
-	msg.tipoEthernet = htons(ETH_P_ARP);
-	msg.tipoHardware = htons(ARPHRD_ETHER);
-	msg.protocolo = htons(ETH_P_IP);
-	msg.longitudMAC = 6;
-	msg.longitudRed = 4;
-	msg.tipoARP = htons(ARPOP_REQUEST);
-	bzero(&msg.destinoMAC, 6);
-	
-	inet_aton(argv[1], msg.destinoIP);
-	strncpy(ip, msg.destinoIP, 4);
-	bzero(&sa, sizeof(sa));
-	strcpy(sa.sa_data, ETH);
-	
-//Termina llenado del paquete
-
-//Envio del paquete
-
-	if(sendto(s, &msg, sizeof(msg), 0, (struct sockaddr *) &sa, sizeof(sa)) < 0)
-		{
-			perror("ERROR al enviar");
-			return -1;
-		}
-	printf("\nPaquete enviado\n");
-
-*/
-
+printf("\nestamos listos\n");
 //Recepcion
 
 	do{
@@ -105,6 +73,28 @@ int main(int argc, char *argv[]){
 			}
 		if(ntohs(msg.tipoARP) == ARPOP_REQUEST)
 			{
+printf("relax");
+
+				if(!mysql_real_connect(conn, server, user, password, database, 0, NULL, 0))	
+					fprintf(stderr, "ERROR para conectarse a mysql", mysql_error(conn));
+				else
+				{
+					//Construir query
+					char *query = "select * from tablaARP";
+
+					if(mysql_query(conn, query))
+						fprintf(stderr, "\nNEL con el query\n", mysql_error(conn));			
+					else
+					{
+						res = mysql_use_result(conn);
+						while(row = mysql_fetch_row(res) != NULL)
+							printf("%s\n", row[0]);
+						mysql_free_result(res);
+					}
+				}						
+					
+				mysql_close(conn);
+				
 				fprintf(stdout, OTRA,
 					msg.origenMAC[0], msg.origenMAC[1], msg.origenMAC[2], msg.origenMAC[3],
 					msg.origenMAC[4], msg.origenMAC[5],
@@ -112,6 +102,6 @@ int main(int argc, char *argv[]){
 						); 
 			}
 		}while(1);
-
+printf("\nque pedo\n");
 	close(s);
 }

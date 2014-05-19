@@ -1,0 +1,152 @@
+     1	#include<sys/types.h>
+     2	#include<sys/socket.h>
+     3	#include<sys/ioctl.h>
+     4	#include<net/if.h>
+     5	#include<net/ethernet.h>
+     6	#include<net/if_arp.h>
+     7	#include<netinet/in.h>
+     8	#include<string.h>
+     9	#include<stdio.h>
+    10	
+    11	#include<mysql/mysql.h>
+    12	
+    13	#define ETH "eth0"
+    14	#define RESPUESTA "Respuesta: La IP %s pertenece a %02X:%02X:%02X:%02X:%02X:%02X\n"
+    15	#define OTRA "%02X:%02X:%02X:%02X:%02X:%02X quiere saber que pedo con %02X:%02X:%02X:%02X\n"
+    16	
+    17	struct msgARP{
+    18		unsigned char destinoEthernet[6];
+    19		unsigned char origenEthernet[6];
+    20		unsigned short tipoEthernet;
+    21		unsigned short tipoHardware;
+    22		unsigned short protocolo;
+    23		unsigned char longitudMAC;
+    24		unsigned char longitudRed;
+    25		unsigned short tipoARP;
+    26		unsigned char origenMAC[6];
+    27		unsigned char origenIP[4];
+    28		unsigned char destinoMAC[6];
+    29		unsigned char destinoIP[4];
+    30	};
+    31	
+    32	int main(int argc, char *argv[]){
+    33		struct msgARP msg;
+    34		struct ifreq ifr;
+    35		struct sockaddr sa;
+    36		int s, optval, n;
+    37		unsigned char ip[4];
+    38		
+    39		MYSQL *conn;
+    40		MYSQL_RES *res;
+    41		MYSQL_ROW row;
+    42		
+    43		char *server = "localhost";
+    44		char *user = "root";
+    45		char *password = "//lsoazules:"; 
+    46		char *database = "redes";
+    47	
+    48		conn = mysql_init(null);
+    49		
+    50	
+    51		if((s = socket(AF_INET, SOCK_PACKET, htons(ETH_P_ARP))) < 0)
+    52			{
+    53				perror("ERROR al abrir socket");
+    54				return -1;
+    55			}
+    56	
+    57		if(setsockopt(s, SOL_SOCKET, SO_BROADCAST, &optval, sizeof(optval)) < 0) 
+    58			{
+    59				perror("ERROR en la funcion setsockopt");
+    60				return -1;
+    61			}
+    62	
+    63	//Llenado de paquete
+    64	/*
+    65	
+    66		strcpy(ifr.ifr_name, ETH);
+    67		if(ioctl(s, SIOCGIFHWADDR, &ifr) < 0)
+    68			{
+    69				perror("ERROR al obtener MAC origen");
+    70				return -1;
+    71			}
+    72		bcopy(&ifr.ifr_hwaddr.sa_data, &msg.origenMAC, 6);
+    73		bcopy(&ifr.ifr_hwaddr.sa_data, &msg.origenEthernet, 6);
+    74	
+    75		if(ioctl(s, SIOCGIFADDR, &ifr) < 0)
+    76			{
+    77				perror("ERROR al obtener IP origen");
+    78				return -1;
+    79			}
+    80	
+    81		bcopy(&ifr.ifr_hwaddr.sa_data[2], &msg.origenIP, 4);
+    82		memset(&msg.destinoEthernet, 0xff, 6);
+    83		msg.tipoEthernet = htons(ETH_P_ARP);
+    84		msg.tipoHardware = htons(ARPHRD_ETHER);
+    85		msg.protocolo = htons(ETH_P_IP);
+    86		msg.longitudMAC = 6;
+    87		msg.longitudRed = 4;
+    88		msg.tipoARP = htons(ARPOP_REQUEST);
+    89		bzero(&msg.destinoMAC, 6);
+    90		
+    91		inet_aton(argv[1], msg.destinoIP);
+    92		strncpy(ip, msg.destinoIP, 4);
+    93		bzero(&sa, sizeof(sa));
+    94		strcpy(sa.sa_data, ETH);
+    95		
+    96	//Termina llenado del paquete
+    97	
+    98	//Envio del paquete
+    99	
+   100		if(sendto(s, &msg, sizeof(msg), 0, (struct sockaddr *) &sa, sizeof(sa)) < 0)
+   101			{
+   102				perror("ERROR al enviar");
+   103				return -1;
+   104			}
+   105		printf("\nPaquete enviado\n");
+   106	
+   107	*/
+   108	
+   109	//Recepcion
+   110	
+   111		do{
+   112			bzero(&sa, sizeof(sa));
+   113			bzero(&msg, sizeof(msg));
+   114			n = sizeof(sa);
+   115			if(recvfrom(s, &msg, sizeof(msg), 0, (struct sockaddr *) &sa, &n) < 0)
+   116				{
+   117					perror("ERROR al recibir");
+   118					return -1;
+   119				}
+   120			if(ntohs(msg.tipoARP) == ARPOP_REQUEST)
+   121				{
+   122	
+   123					if(!mysql_real_connect(conn, server, user, password, database, 0, NULL, 0))	
+   124						perror("ERROR para conectarse a mysql");
+   125					else
+   126					{
+   127						//Construir query
+   128						char *query = "select * from tablaARP";
+   129	
+   130						if(mysql_query(conn, query)
+   131							fprintf(stderr, "\nNEL con el query\n", mysql_error(conn));			
+   132						else
+   133						{
+   134							res = mysql_use_result(conn);
+   135							while(row = mysql_fetch_rows(res) != NULL)
+   136								printf("%s\n", row[0]);
+   137							mysql_free_result(res);
+   138						}
+   139					}						
+   140						
+   141					mysql_close(conn);
+   142					
+   143					fprintf(stdout, OTRA,
+   144						msg.origenMAC[0], msg.origenMAC[1], msg.origenMAC[2], msg.origenMAC[3],
+   145						msg.origenMAC[4], msg.origenMAC[5],
+   146						msg.destinoIP[0], msg.destinoIP[1], msg.destinoIP[2], msg.destinoIP[3]
+   147							); 
+   148				}
+   149			}while(1);
+   150	
+   151		close(s);
+   152	}
