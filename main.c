@@ -59,7 +59,6 @@ int main(int argc, char *argv[]){
 			perror("ERROR en la funcion setsockopt");
 			return -1;
 		}
-printf("\nestamos listos\n");
 //Recepcion
 
 	do{
@@ -74,9 +73,12 @@ printf("\nestamos listos\n");
 		if(ntohs(msg.tipoARP) == ARPOP_REQUEST)
 			{
 printf("relax");
-
+conn = mysql_init(NULL);
 				if(!mysql_real_connect(conn, server, user, password, database, 0, NULL, 0))	
+				{	
 					fprintf(stderr, "ERROR para conectarse a mysql", mysql_error(conn));
+					return -1;
+				}
 				else
 				{
 					//Construir query
@@ -87,7 +89,7 @@ printf("relax");
 					else
 					{
 						res = mysql_use_result(conn);
-						while(row = mysql_fetch_row(res) != NULL)
+						while((row = mysql_fetch_row(res)) != NULL)
 							printf("%s\n", row[0]);
 						mysql_free_result(res);
 					}
