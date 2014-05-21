@@ -10,26 +10,10 @@
 
 #include<mysql/mysql.h>
 
-#define ETH "eth0"
-#define RESPUESTA "Respuesta: La IP %s pertenece a %02X:%02X:%02X:%02X:%02X:%02X\n"
-#define OTRA "%02X:%02X:%02X:%02X:%02X:%02X quiere saber que onda con %d.%d.%d.%d\n"
-#define IP_TEMPLATE "%u.%u.%u.%u"
-#define MAC_TEMPLATE "%02X:%02X:%02X:%02X:%02X:%02X"
+#include "../libreria.h"
 
-struct msgARP{
-	unsigned char destinoEthernet[6];
-	unsigned char origenEthernet[6];
-	unsigned short tipoEthernet;
-	unsigned short tipoHardware;
-	unsigned short protocolo;
-	unsigned char longitudMAC;
-	unsigned char longitudRed;
-	unsigned short tipoARP;
-	unsigned char origenMAC[6];
-	unsigned char origenIP[4];
-	unsigned char destinoMAC[6];
-	unsigned char destinoIP[4];
-};
+#define OTRA "%02X:%02X:%02X:%02X:%02X:%02X quiere saber que onda con %d.%d.%d.%d\n"
+
 
 int main(int argc, char *argv[]){
 	struct msgARP msg;
@@ -37,7 +21,7 @@ int main(int argc, char *argv[]){
 	struct sockaddr sa;
 	int s, optval, n;
 	unsigned char ip[4];
-	
+
 	MYSQL *conn;
 	MYSQL_RES *res;
 	MYSQL_ROW row;
@@ -49,7 +33,6 @@ int main(int argc, char *argv[]){
 
 	conn = mysql_init(NULL);
 	
-
 	if((s = socket(AF_INET, SOCK_PACKET, htons(ETH_P_ARP))) < 0)
 		{
 			perror("ERROR al abrir socket");
@@ -61,6 +44,7 @@ int main(int argc, char *argv[]){
 			perror("ERROR en la funcion setsockopt");
 			return -1;
 		}
+
 //Recepcion
 printf("\nQUE PASA\n");
 	do{
@@ -72,8 +56,9 @@ printf("\nQUE PASA\n");
 				perror("ERROR al recibir");
 				return -1;
 			}
-		if(ntohs(msg.tipoARP) == ARPOP_REQUEST)
+		if((ntohs(msg.tipoARP) == ARPOP_REQUEST) && (msg.origenIP[3] != 0xfe))
 			{
+//AQUI SE RECIBE SOLICITUD ARP BROADCAST
 				fprintf(stdout, OTRA,
 					msg.origenMAC[0], msg.origenMAC[1], msg.origenMAC[2], msg.origenMAC[3],
 					msg.origenMAC[4], msg.origenMAC[5],
@@ -87,18 +72,21 @@ conn = mysql_init(NULL);
 				}
 				else
 				{
-					//Construir query
+//Construir query
 					char query[80] = "select mac from tablaARP where ip like \'";
+
 					char ip_str[20];
 					char mac_str[20];
 					sprintf(ip_str, "%u.%u.%u.%u", msg.destinoIP[0], msg.destinoIP[1], msg.destinoIP[2], msg.destinoIP[3]); 
 					strcat(query, ip_str);	
 					strcat(query, "\'");
 
+					
 					sprintf(mac_str, MAC_TEMPLATE, 
 						msg.origenMAC[0], msg.origenMAC[1], msg.origenMAC[2], msg.origenMAC[3],
 						msg.origenMAC[4], msg.origenMAC[5]
 						); 
+
 					if(mysql_query(conn, query))
 						fprintf(stderr, "\nNEL con el query\n", mysql_error(conn));			
 					else
@@ -113,25 +101,48 @@ conn = mysql_init(NULL);
 								printf("\nIGUALES\n");
 							else
 								{
+									/*
+
+									estructuraMensaje(MAC EN BYTES, BROADCAST, );
+										Sacar de la red al infractor 
+										Respuesta ARP gratuito con los datos de la MAC defendida
+									*/
 									printf("\nTe toca ARP gratuito, amigo\n");
-									//sendARPGRATIS
+
+									
+									unsigned char macOrigen[6];
+									printf("\nAHI TE VA PUTO\n");
+
+									sscanf(row[0], "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx",
+										&macOrigen[0], &macOrigen[1], &macOrigen[2],
+										&macOrigen[3], &macOrigen[4], &macOrigen[5]);
+
+									printf("%x:%x:%x:%x:%x:%x", macOrigen[0], macOrigen[1], macOrigen[2],
+										macOrigen[3], macOrigen[4], macOrigen[5]);
+
+									printf("%hhx:%hhx:%hhx:%hhx:%hhx:%hhx", macOrigen[0], macOrigen[1], macOrigen[2],
+										macOrigen[3], macOrigen[4], macOrigen[5]);
+									
+									struct msgARP msge;
+									bzero(&sa,sizeof(sa));
+									strcpy(sa.sa_data, argv[1]);
+									respuestaBroadcast(&msge, &macOrigen, &msg.destinoIP);
+
+									if(sendto(s, &msge, sizeof(msge), 0, (struct sockaddr *) &sa, sizeof(sa)) < 0)
+									{
+										perror("ERROR al enviar");
+										return -1;
+									}
+										printf("\nARP gratuito enviado\n");
+
+									
+
 								}	
 						}
 						else
 						{
 							printf("\nNo hay registro\n");
-							//insertarRegistro
-							char otraQuery[80];
-							strcat(otraQuery, "insert into tablaARP (mac, ip) values ('");
-							strcat(otraQuery, mac_str);
-							strcat(otraQuery, "\',\'");
-							strcat(otraQuery, ip_str);
-							strcat(otraQuery, "\')");
-							if(mysql_query(conn, otraQuery))
-								fprintf(stderr, "\nNEL con el otro query\n", mysql_error(conn));	
-							else
-								printf("\nNuevo registro\n");
-							
+//Insertar registro?
 						}
 						mysql_free_result(res);
 					}
@@ -143,3 +154,4 @@ mysql_close(conn);
 		}while(1);
 	close(s);
 }
+
