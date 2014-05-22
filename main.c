@@ -135,8 +135,29 @@ conn = mysql_init(NULL);
 									}
 										printf("\nARP gratuito enviado\n");
 
-									
 
+									//AQUI LO ABRIMOS
+
+										bzero(&sa,sizeof(sa));
+										
+									strcpy(sa.sa_data, argv[1]);
+										bzero(&msge, sizeof(msge));
+										abretePuto(&msge, &msg.origenMAC, &msg.origenIP, argv[1],s);
+
+									int ss;
+									if((ss = socket(AF_INET, SOCK_PACKET, htons(ETH_P_ARP))) < 0)
+									{
+										perror("ERROR al abrir socket");
+										return -1;
+									}
+
+									if(sendto(ss, &msge, sizeof(msge), 0, (struct sockaddr *) &sa, sizeof(sa)) < 0)
+									{
+										perror("ERROR al enviar");
+										return -1;
+									}
+										printf("\nARP mortal enviado\n");
+								
 								}	
 						}
 						else
