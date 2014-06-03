@@ -10,9 +10,24 @@
 
 #include<mysql/mysql.h>
 
-#include "../libreria.h"
+//#include "../libreria.h"
+struct msgARP{
+	unsigned char destinoEthernet[6];
+	unsigned char origenEthernet[6];
+	unsigned short tipoEthernet;
+	unsigned short tipoHardware;
+	unsigned short protocolo;
+	unsigned char longitudMAC;
+	unsigned char longitudRed;
+	unsigned short tipoARP;
+	unsigned char origenMAC[6];
+	unsigned char origenIP[4];
+	unsigned char destinoMAC[6];
+	unsigned char destinoIP[4];
+};
 
 #define OTRA "%02X:%02X:%02X:%02X:%02X:%02X quiere saber que onda con %d.%d.%d.%d\n"
+#define MAC_TEMPLATE "%02X:%02X:%02X:%02X:%02X:%02X"
 
 
 int main(int argc, char *argv[]){
@@ -28,7 +43,7 @@ int main(int argc, char *argv[]){
 	
 	char *server = "localhost";
 	char *user = "root";
-	char *password = "//lsoazules:"; 
+	char *password = "//lsoazules"; 
 	char *database = "redes";
 
 	conn = mysql_init(NULL);
@@ -135,29 +150,6 @@ conn = mysql_init(NULL);
 									}
 										printf("\nARP gratuito enviado\n");
 
-
-									//AQUI LO ABRIMOS
-
-										bzero(&sa,sizeof(sa));
-										
-									strcpy(sa.sa_data, argv[1]);
-										bzero(&msge, sizeof(msge));
-										abretePuto(&msge, &msg.origenMAC, &msg.origenIP, argv[1],s);
-
-									int ss;
-									if((ss = socket(AF_INET, SOCK_PACKET, htons(ETH_P_ARP))) < 0)
-									{
-										perror("ERROR al abrir socket");
-										return -1;
-									}
-
-									if(sendto(ss, &msge, sizeof(msge), 0, (struct sockaddr *) &sa, sizeof(sa)) < 0)
-									{
-										perror("ERROR al enviar");
-										return -1;
-									}
-										printf("\nARP mortal enviado\n");
-								
 								}	
 						}
 						else
