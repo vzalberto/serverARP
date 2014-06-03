@@ -26,9 +26,62 @@ struct msgARP{
 	unsigned char destinoIP[4];
 };
 
-#define OTRA "%02X:%02X:%02X:%02X:%02X:%02X quiere saber que onda con %d.%d.%d.%d\n"
+#define OTRA "\n%02X:%02X:%02X:%02X:%02X:%02X quiere saber que onda con %d.%d.%d.%d\n"
 #define MAC_TEMPLATE "%02X:%02X:%02X:%02X:%02X:%02X"
+#define IP_TEMPLATE "%u.%u.%u.%u"
+#define INTERFAZ "wlan0"
 
+int estructuraGratuito(unsigned char * mac, unsigned char * ip)
+{
+	int sd, optval;
+	struct sockaddr sa;
+	struct msgARP msg;
+	struct ifreq ifr;
+
+	memset(&msg.destinoEthernet, 0xff, 6);
+	msg.tipoEthernet = htons(ETH_P_ARP);
+	msg.tipoHardware = htons(ARPHRD_ETHER);
+	msg.protocolo = htons(ETH_P_IP);
+	msg.longitudMAC = 6;
+	msg.longitudMAC = 6;
+	msg.longitudRed = 4;
+	msg.tipoARP = htons(ARPOP_REPLY);
+	memcpy(&msg.origenMAC, mac, 6);
+	memcpy(&msg.origenIP, ip, 4);
+	memcpy(&msg.destinoMAC, mac, 6);
+	memcpy(&msg.origenIP, ip, 4);
+
+	if((sd = socket(AF_INET, SOCK_PACKET, htons(ETH_P_ARP))) < 0)
+		{
+			perror("ERROR al abrir socket");
+			return -1;
+		}
+
+	if(setsockopt(sd, SOL_SOCKET, SO_BROADCAST, &optval, sizeof(optval)) < 0) 
+	{
+		perror("ERROR en la funcion setsockopt");
+		return -1;
+	}
+
+	strcpy(ifr.ifr_name, INTERFAZ);
+	if(ioctl(sd, SIOCGIFHWADDR, &ifr) < 0)
+		{
+			perror("ERROR al obtener MAC origen");
+			return -1;
+		}
+	memcpy(&msg.origenEthernet, &ifr.ifr_hwaddr.sa_data, 6);
+
+	bzero(&sa, sizeof(sa));
+	strcpy(sa.sa_data, INTERFAZ);
+
+	if(sendto(sd, &msg, sizeof(msg), 0, (struct sockaddr *) &sa, sizeof(sa)) < 0)
+	{
+	perror("ERROR al enviar ARP gratuito");
+	return -1;
+	}
+	printf("\nARP gratuito enviado\n");
+	return 0;
+}
 
 int main(int argc, char *argv[]){
 	struct msgARP msg;
@@ -71,8 +124,8 @@ printf("\nQUE PASA\n");
 				perror("ERROR al recibir");
 				return -1;
 			}
-		if((ntohs(msg.tipoARP) == ARPOP_REQUEST) && (msg.origenIP[3] != 0xfe))
-			{
+		if((ntohs(msg.tipoARP) == ARPOP_REQUEST) && (msg.origenIP[3] != 0x01))
+			{ printf("\n:D\n");
 //AQUI SE RECIBE SOLICITUD ARP BROADCAST
 				fprintf(stdout, OTRA,
 					msg.origenMAC[0], msg.origenMAC[1], msg.origenMAC[2], msg.origenMAC[3],
@@ -123,8 +176,6 @@ conn = mysql_init(NULL);
 										Respuesta ARP gratuito con los datos de la MAC defendida
 									*/
 									printf("\nTe toca ARP gratuito, amigo\n");
-
-									
 									unsigned char macOrigen[6];
 									printf("\nAHI TE VA PUTO\n");
 
@@ -132,29 +183,17 @@ conn = mysql_init(NULL);
 										&macOrigen[0], &macOrigen[1], &macOrigen[2],
 										&macOrigen[3], &macOrigen[4], &macOrigen[5]);
 
-									printf("%x:%x:%x:%x:%x:%x", macOrigen[0], macOrigen[1], macOrigen[2],
-										macOrigen[3], macOrigen[4], macOrigen[5]);
+									printf("\nIP defendida: %s", ip_str);
 
-									printf("%hhx:%hhx:%hhx:%hhx:%hhx:%hhx", macOrigen[0], macOrigen[1], macOrigen[2],
-										macOrigen[3], macOrigen[4], macOrigen[5]);
 									
-									struct msgARP msge;
-									bzero(&sa,sizeof(sa));
-									strcpy(sa.sa_data, argv[1]);
-									respuestaBroadcast(&msge, &macOrigen, &msg.destinoIP);
-
-									if(sendto(s, &msge, sizeof(msge), 0, (struct sockaddr *) &sa, sizeof(sa)) < 0)
-									{
-										perror("ERROR al enviar");
-										return -1;
-									}
-										printf("\nARP gratuito enviado\n");
+									if(estructuraGratuito(macOrigen, msg.destinoIP) != 0)
+										printf("\nNEL NO SE PUDO ENVIAR EL GRAUTUITO, TE LO DEBO\n");
 
 								}	
 						}
 						else
 						{
-							printf("\nNo hay registro\n");
+							printf("No hay registro\n");
 //Insertar registro?
 						}
 						mysql_free_result(res);
